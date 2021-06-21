@@ -8,7 +8,7 @@ echo "#####################"
 
 set -eux
 
-cp -r /usr/lib/python3.7/site-packages/xcbgen /usr/lib/python2.7/site-packages
+# cp -r /usr/lib/python3.7/site-packages/xcbgen /usr/lib/python2.7/site-packages
 
 #export CCACHE_MAXSIZE=25G
 
@@ -31,6 +31,12 @@ env
 #NOCCACHE_PATH="${PATH}"
 #export PATH="${PWD}:${PATH}"
 
+# Use local CMAKE build 
+export PATH=/root/cmake-3.13.5/bin:$PATH
+
+# Ensure we're using Python2 and the correct local cmake
+python --version
+which cmake
 which clang
 which clang++
 
@@ -38,8 +44,14 @@ ls -lGha
 
 #cd ../
 
+# On subsequent re-runs, just delete the build/src directory, but don't re-download Chromium
 mkdir -p build/download_cache
-./utils/downloads.py retrieve -c build/download_cache -i downloads.ini
+if [ -z "$(ls -A build/download_cache)" ]; then
+    ./utils/downloads.py retrieve -c build/download_cache -i downloads.ini
+else
+    rm -rf build/src
+    rm build/domsubcache.tar.gz
+fi
 ./utils/downloads.py unpack -c build/download_cache -i downloads.ini -- build/src
 
 ./utils/prune_binaries.py build/src pruning.list
@@ -113,7 +125,10 @@ cd src
 
 cp ../../flags.gn out/Default/args.gn
 
+# Do not use openh264 in ffmpeg (broken in RHEL8) and remove the GNOME-keyring dependency (not available on RHEL 8+/Fedora 31+)
 sed "s#../llvm_build#${LLVM_BUILD_DIR}#g" -i out/Default/args.gn
+sed "s/use_openh264=true/#use_openh264=true/" -i out/Default/args.gn
+echo "use_gnome_keyring=false" >> out/Default/args.gn
 
 ./out/Default/gn gen out/Default --fail-on-unused-args
 ninja -C out/Default chrome chrome_sandbox chromedriver #stable_rpm
